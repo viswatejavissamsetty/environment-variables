@@ -1,0 +1,53 @@
+name: Docker
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+on:
+  push:
+    branches:
+      - 'master'
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put current date into a variable
+        id: date
+        run: |
+          echo "NOW=$(date +'%Y_%m_%d_%H_%M_%S')" >> $GITHUB_ENV
+
+      - name: Use variable
+        run: |
+          echo "${{env.NOW}}"
+          NEW_TAG=${BRANCH_NAME}_${{ github.run_number }}_$NOW
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+
+      - name: Push Git Tag
+        run: |
+          git config --global user.email "lhedevo@gmail.com"
+          git config --global user.name "lhedevo"
+          git tag -a "$NEW_TAG" -m "latest build number"
+          git push origin "$NEW_TAG"
+
+      - name: Log in to GitHub Packages
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Docker image
+        run: docker build -f Dockerfile.ambulance -t ghcr.io/life-health-emergency/lhe-backend-ambulance:ambulance-$NEW_TAG .
+        env:
+          NAME: ${{secrets.NAME}}
+          AGE: ${{secrets.AGE}}
+
+      - name: Push Docker image to GitHub Packages
+        run: docker push ghcr.io/life-health-emergency/lhe-backend-ambulance:ambulance-$NEW_TAG
